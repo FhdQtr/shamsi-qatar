@@ -115,7 +115,10 @@ nav{position:fixed;top:0;right:0;left:0;z-index:200;display:flex;align-items:cen
 .warn{font-size:12px;color:#f0b96b;background:rgba(245,166,35,0.1);padding:9px 12px;border-radius:var(--rs);border-right:3px solid var(--sun);margin:7px 0;line-height:1.5;}
 .bsec{display:none;}.bsec.active{display:block;}
 
-.btn-calc{width:100%;padding:13px;background:var(--sun);color:var(--dark);border:none;border-radius:50px;font-size:14px;font-weight:800;cursor:pointer;margin:16px 0;font-family:'Cairo',sans-serif;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-pdf{width:100%;padding:14px;background:var(--dark2);color:var(--sun);border:1.5px solid var(--sun);border-radius:50px;font-size:14px;font-weight:800;cursor:pointer;margin:8px 0 0;font-family:'Cairo',sans-serif;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-pdf:hover{background:var(--sun);color:var(--dark);}
+.btn-pdf.loading{opacity:.6;pointer-events:none;}
+background:var(--sun);color:var(--dark);border:none;border-radius:50px;font-size:14px;font-weight:800;cursor:pointer;margin:16px 0;font-family:'Cairo',sans-serif;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
 .btn-calc:hover{background:var(--sun2);transform:translateY(-2px);}
 
 /* Results */
@@ -648,6 +651,11 @@ footer p{font-size:12px;color:var(--muted);line-height:1.7;}
 
         <!-- Engineering Notes -->
         <div class="fcard"><div class="ftitle" id="r-tip-title">ملاحظات هندسية</div><div id="r-tips"></div></div>
+
+        <!-- PDF Download -->
+        <button class="btn-pdf" id="pdfBtn" onclick="downloadPDF()">
+          <span id="pdf-ico">📄</span> <span id="pdf-btn-txt">تحميل التقرير PDF</span>
+        </button>
       </div>
     </div>
   </div>
@@ -808,15 +816,6 @@ footer p{font-size:12px;color:var(--muted);line-height:1.7;}
       <h1 id="ct-h">نسعد <span>بمساعدتك</span></h1>
       <p id="ct-sub">عندك سؤال عن الطاقة الشمسية؟ أو ملاحظة على الحاسبة؟ راسلنا وبنرد عليك في أقرب وقت.</p>
     </div>
-
-    <!-- Direct email -->
-    <a class="email-direct" href="mailto:f-3-3@hotmail.com">
-      <div class="ed-ico">✉</div>
-      <div class="ed-txt">
-        <div class="ed-label" id="ct-email-label">راسلنا مباشرة</div>
-        <div class="ed-val">f-3-3@hotmail.com</div>
-      </div>
-    </a>
 
     <!-- Contact form -->
     <div class="contact-card" id="form-wrap">
@@ -1333,8 +1332,11 @@ function calculate(){
   drawProtectiveDiagram({numP,pWp,bCnt,busV,ctrlA,invKw,isc,a,nStr,pps,cVolt});
   ge('r-wiring-title').textContent=a?'مخطط التوصيل مع القواطع والحماية':'Wiring Diagram with Breakers & Protection';
 
-  // Store for diagram functions
-  window._diag={numP,pWp,vmp,imp,voc,isc,nStr,pps,bCnt,bCap,busV,bConf,ctrlA,cVin,invKw,tPKw,battAh,battV,dod};
+  // Store for diagram functions and PDF
+  window._diag={numP,pWp,vmp,imp,voc,isc,nStr,pps,bCnt,bCap,busV,bConf,ctrlA,cVin,invKw,tPKw,battAh,battV,dod,
+    eco_numP,eco_tPKw,eco_bCnt,eco_bCap,
+    eco_bCapKwh:parseFloat((eco_bCap*busV/1000).toFixed(1)),
+    std_numP,std_bCnt};
   drawDiagPanels();
   drawDiagBatts();
 
@@ -1924,6 +1926,244 @@ function buildSizeAlert({dKwh,numP,pWp,bCnt,battAh,bDays,busV,bCap,dod,cType,a,s
     </div>
     ${causes.length?`<div class="sa-rows" style="margin-top:8px;">${causes.map(c=>`<div class="sa-row" style="flex-direction:column;align-items:flex-start;gap:2px;"><div style="display:flex;justify-content:space-between;width:100%;"><span class="sa-label">${c.label}</span><span class="sa-val">${c.val}</span></div><span class="sa-cause">${c.note}</span></div>`).join('')}</div>`:''}
     ${sug.length?`<div class="sa-suggestion"><strong style="display:block;margin-bottom:4px;color:var(--sun);">${a?'لتصغير المنظومة:':'To reduce system size:'}</strong>${sug.map(s=>`• ${s}`).join('<br>')}</div>`:''}`;
+}
+
+// ── PDF Export ──
+function downloadPDF(){
+  const btn=ge('pdfBtn');
+  const a=lang==='ar';
+  btn.classList.add('loading');
+  ge('pdf-btn-txt').textContent=a?'جاري التجهيز...':'Preparing...';
+
+  const d=window._diag;
+  if(!d){alert(a?'احسب المواصفات أولاً':'Calculate first');btn.classList.remove('loading');return;}
+
+  // Build clean RTL HTML for printing
+  const dual=ge('dual-calc')?.innerHTML||'';
+  const load=ge('r-load')?.innerHTML||'';
+  const comps=ge('r-comps')?.innerHTML||'';
+  const specs=ge('r-specs')?.innerHTML||'';
+  const tips=ge('r-tips')?.innerHTML||'';
+  const sub=ge('r-sub')?.textContent||'';
+  const wTitle=ge('r-wiring-title')?.textContent||'';
+
+  // SVG diagrams as data URLs
+  const getSVG=(id)=>{
+    const svg=ge(id);
+    if(!svg||!svg.innerHTML) return '';
+    const s=new XMLSerializer().serializeToString(svg);
+    return 'data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(s)));
+  };
+
+  const panelSVG=getSVG('diag-panels-svg');
+  const battSVG=getSVG('diag-batt-svg');
+  const wiringSVGEl=ge('r-wiring')?.querySelector('svg');
+  const wiringSVG=wiringSVGEl?'data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(wiringSVGEl)))):'';
+
+  const now=new Date();
+  const dateStr=now.toLocaleDateString(a?'ar-QA':'en-QA',{year:'numeric',month:'long',day:'numeric'});
+
+  const html=`<!DOCTYPE html>
+<html lang="${a?'ar':'en'}" dir="${a?'rtl':'ltr'}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<title>${a?'تقرير الطاقة الشمسية — شمسي قطر':'Solar Report — Shamsi Qatar'}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Cairo',Arial,sans-serif;background:#fff;color:#1a1a1a;direction:${a?'rtl':'ltr'};font-size:13px;line-height:1.6;}
+  .page{max-width:210mm;margin:0 auto;padding:12mm 14mm;}
+
+  /* Header */
+  .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:2.5px solid #F5A623;margin-bottom:18px;}
+  .header-logo{display:flex;align-items:center;gap:10px;}
+  .logo-circle{width:40px;height:40px;background:#F5A623;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;}
+  .logo-text{font-size:20px;font-weight:900;color:#0D1F1A;}
+  .logo-sub{font-size:10px;color:#888;}
+  .header-date{font-size:11px;color:#888;text-align:${a?'left':'right'};}
+  .report-title{font-size:11px;color:#1A7A5E;font-weight:700;margin-top:2px;}
+
+  /* Section titles */
+  .sec-title{font-size:15px;font-weight:800;color:#0D1F1A;margin:20px 0 10px;padding-bottom:6px;border-bottom:1.5px solid #E8F7F2;display:flex;align-items:center;gap:8px;}
+  .sec-title .ico{font-size:16px;}
+
+  /* Dual comparison */
+  .dual-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+  .calc-box{border-radius:10px;padding:14px;border:1px solid;}
+  .calc-box.eco{background:#F0FAF6;border-color:#2AAD87;}
+  .calc-box.std{background:#F0F6FF;border-color:#378ADD;}
+  .calc-label{font-size:10px;font-weight:800;letter-spacing:.5px;margin-bottom:8px;}
+  .calc-label.eco{color:#1A7A5E;}
+  .calc-label.std{color:#185FA5;}
+  .calc-desc{font-size:10px;color:#666;margin-bottom:10px;line-height:1.5;}
+  .calc-row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:0.5px solid rgba(0,0,0,0.07);}
+  .calc-row:last-child{border:none;font-weight:700;}
+  .calc-row span:last-child{font-weight:700;}
+  .calc-row.eco span:last-child{color:#1A7A5E;}
+  .calc-row.std span:last-child{color:#185FA5;}
+  .saving-bar{background:#FFFBEC;border:1px solid #F5A623;border-radius:6px;padding:8px 12px;font-size:11px;color:#854F0B;margin-top:10px;}
+
+  /* Components grid */
+  .comp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
+  .comp-card{border-radius:10px;padding:12px;border:1px solid;}
+  .comp-card.g{background:#F0FAF6;border-color:#2AAD87;}
+  .comp-card.b{background:#F0F6FF;border-color:#85B7EB;}
+  .comp-card.a{background:#FFFBEC;border-color:#EF9F27;}
+  .comp-card.gr{background:#F5F5F5;border-color:#ccc;}
+  .cc-ico{font-size:18px;margin-bottom:5px;}
+  .cc-label{font-size:9px;font-weight:700;letter-spacing:.5px;color:#888;text-transform:uppercase;margin-bottom:3px;}
+  .cc-main{font-size:16px;font-weight:900;color:#0D1F1A;line-height:1.1;}
+  .comp-card.g .cc-main{color:#1A7A5E;}
+  .comp-card.b .cc-main{color:#185FA5;}
+  .comp-card.a .cc-main{color:#854F0B;}
+  .cc-spec{font-size:10px;color:#666;margin-top:4px;line-height:1.5;}
+
+  /* Tables */
+  table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;}
+  td{padding:7px 10px;border-bottom:0.5px solid #eee;vertical-align:top;}
+  td:first-child{color:#666;width:44%;font-weight:500;}
+  td:last-child{font-weight:600;color:#1a1a1a;}
+  tr:last-child td{border:none;}
+
+  /* Protection table */
+  .prot-row td:first-child{color:#854F0B;}
+  .prot-row td:last-child{color:#854F0B;}
+
+  /* SVG diagrams */
+  .diagram-box{background:#F8FFFE;border:1px solid #E0F2EC;border-radius:10px;padding:12px;margin-bottom:16px;text-align:center;}
+  .diagram-box img{max-width:100%;height:auto;}
+  .diagram-label{font-size:10px;color:#888;margin-top:6px;}
+
+  /* Tips */
+  .tip{display:flex;gap:10px;padding:9px 12px;background:#FFFBEC;border-radius:8px;border-right:3px solid #F5A623;margin-bottom:8px;break-inside:avoid;}
+  .tip-ico{font-size:14px;flex-shrink:0;width:20px;}
+  .tip-body{font-size:11px;color:#444;line-height:1.6;}
+  .tip-body strong{font-weight:700;color:#1a1a1a;display:block;margin-bottom:1px;font-size:12px;}
+
+  /* Load summary */
+  .load-row td:nth-child(2){color:#1A7A5E;font-weight:700;}
+  .day-row td:first-child{color:#E8870A;}
+  .night-row td:first-child{color:#185FA5;}
+
+  /* Footer */
+  .footer{margin-top:24px;padding-top:10px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#aaa;}
+
+  /* Page breaks */
+  .page-break{break-before:page;margin-top:0;}
+  .no-break{break-inside:avoid;}
+
+  @media print{
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .page{padding:8mm 12mm;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <div class="logo-circle">☀</div>
+      <div>
+        <div class="logo-text">${a?'شمسي قطر':'Shamsi Qatar'}</div>
+        <div class="logo-sub">${a?'حاسبة الطاقة الشمسية':'Solar Energy Calculator'}</div>
+      </div>
+    </div>
+    <div class="header-date">
+      <div>${dateStr}</div>
+      <div class="report-title">${a?'تقرير تصميم المنظومة الشمسية':'Solar System Design Report'}</div>
+    </div>
+  </div>
+
+  <!-- Sub summary -->
+  <div style="background:#F0FAF6;border-radius:8px;padding:10px 14px;font-size:11px;color:#1A7A5E;font-weight:600;margin-bottom:20px;">
+    ${sub}
+  </div>
+
+  <!-- Section 1: Dual Comparison -->
+  <div class="sec-title"><span class="ico">💰</span>${a?'مقارنة الحسبتين: الاقتصادية والعادية':'Comparison: Economic vs Standard'}</div>
+  <div class="dual-grid">
+    <div class="calc-box eco">
+      <div class="calc-label eco">💰 ${a?'الحسبة الاقتصادية':'ECONOMIC'}</div>
+      <div class="calc-desc">${a?'أولوية الألواح المباشرة — البطارية للليل فقط':'Solar priority — battery for night only'}</div>
+      <div class="calc-row eco"><span>${a?'الألواح':'Panels'}</span><span>${d.eco_numP||d.numP} × ${d.pWp}W</span></div>
+      <div class="calc-row eco"><span>${a?'البطاريات':'Batteries'}</span><span>${d.eco_bCnt||d.bCnt} × ${d.battAh||200}Ah</span></div>
+      <div class="calc-row eco"><span>${a?'سعة البنك':'Bank'}</span><span>${d.eco_bCapKwh||((d.eco_bCnt||d.bCnt)*(d.battAh||200)*d.busV/1000).toFixed(1)} kWh</span></div>
+    </div>
+    <div class="calc-box std">
+      <div class="calc-label std">🔒 ${a?'الحسبة العادية':'STANDARD'}</div>
+      <div class="calc-desc">${a?'تغطية كاملة 24 ساعة — مستقل تماماً':'Full 24h coverage — fully independent'}</div>
+      <div class="calc-row std"><span>${a?'الألواح':'Panels'}</span><span>${d.numP} × ${d.pWp}W</span></div>
+      <div class="calc-row std"><span>${a?'البطاريات':'Batteries'}</span><span>${d.bCnt} × ${d.battAh||200}Ah</span></div>
+      <div class="calc-row std"><span>${a?'سعة البنك':'Bank'}</span><span>${(d.bCap*d.busV/1000).toFixed(1)} kWh</span></div>
+    </div>
+  </div>
+
+  <!-- Section 2: Load Summary -->
+  <div class="sec-title"><span class="ico">📊</span>${a?'ملخص الأحمال الكهربائية':'Electrical Load Summary'}</div>
+  <table>
+    <tbody class="load-body">
+      ${load}
+    </tbody>
+  </table>
+
+  <!-- Section 3: Components -->
+  <div class="sec-title page-break"><span class="ico">🔧</span>${a?'مكونات المنظومة المطلوبة':'Required System Components'}</div>
+  <div class="comp-grid">${comps}</div>
+
+  <!-- Section 4: Wiring Diagram -->
+  <div class="sec-title"><span class="ico">⚡</span>${wTitle||( a?'مخطط التوصيل مع القواطع والحماية':'Wiring Diagram with Protection')}</div>
+  ${wiringSVG?`<div class="diagram-box"><img src="${wiringSVG}" style="max-height:160px;"/><div class="diagram-label">${a?'مخطط التوصيل الكامل مع عناصر الحماية':'Full wiring with protection components'}</div></div>`:''}
+
+  <!-- Section 5: Panel Wiring -->
+  ${panelSVG?`<div class="sec-title"><span class="ico">☀</span>${a?'مخطط توصيل الألواح الشمسية':'Solar Panel Wiring Diagram'}</div>
+  <div class="diagram-box"><img src="${panelSVG}" style="max-height:220px;"/><div class="diagram-label">${ge('dp-note')?.textContent||''}</div></div>`:''}
+
+  <!-- Section 6: Battery Wiring -->
+  ${battSVG?`<div class="sec-title page-break"><span class="ico">🔋</span>${a?'مخطط توصيل البطاريات':'Battery Wiring Diagram'}</div>
+  <div class="diagram-box"><img src="${battSVG}" style="max-height:220px;"/><div class="diagram-label">${ge('db-note')?.textContent||''}</div></div>`:''}
+
+  <!-- Section 7: Detailed Specs -->
+  <div class="sec-title page-break"><span class="ico">📋</span>${a?'المواصفات التفصيلية والقواطع':'Detailed Specifications & Breakers'}</div>
+  <table><tbody>${specs}</tbody></table>
+
+  <!-- Section 8: Engineering Notes -->
+  <div class="sec-title"><span class="ico">📝</span>${a?'ملاحظات هندسية مهمة':'Important Engineering Notes'}</div>
+  <div>${tips}</div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>${a?'شمسي قطر — shamsi-qatar.vercel.app':'Shamsi Qatar — shamsi-qatar.vercel.app'}</span>
+    <span>${a?'للاستفادة العامة — هذا التقرير تقديري وليس وثيقة هندسية رسمية':'For general use — this report is indicative, not an official engineering document'}</span>
+  </div>
+
+</div>
+</body>
+</html>`;
+
+  // Open in new window and print
+  const win=window.open('','_blank','width=900,height=700');
+  win.document.write(html);
+  win.document.close();
+
+  // Wait for fonts then print
+  win.onload=()=>{
+    setTimeout(()=>{
+      win.print();
+      btn.classList.remove('loading');
+      ge('pdf-btn-txt').textContent=a?'تحميل التقرير PDF':'Download PDF Report';
+    },1200);
+  };
+
+  // Store eco data for PDF
+  const dualEl=ge('dual-calc');
+  if(dualEl){
+    const spans=dualEl.querySelectorAll('.sa-val,[style*="font-weight:800"]');
+  }
+
+  setTimeout(()=>{btn.classList.remove('loading');ge('pdf-btn-txt').textContent=a?'تحميل التقرير PDF':'Download PDF Report';},4000);
 }
 
 // ── Night Hours Helper ──
