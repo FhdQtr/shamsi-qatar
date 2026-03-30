@@ -118,8 +118,8 @@ nav{position:fixed;top:0;right:0;left:0;z-index:200;display:flex;align-items:cen
 .btn-pdf{width:100%;padding:14px;background:var(--dark2);color:var(--sun);border:1.5px solid var(--sun);border-radius:50px;font-size:14px;font-weight:800;cursor:pointer;margin:8px 0 0;font-family:'Cairo',sans-serif;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
 .btn-pdf:hover{background:var(--sun);color:var(--dark);}
 .btn-pdf.loading{opacity:.6;pointer-events:none;}
-background:var(--sun);color:var(--dark);border:none;border-radius:50px;font-size:14px;font-weight:800;cursor:pointer;margin:16px 0;font-family:'Cairo',sans-serif;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
-.btn-calc:hover{background:var(--sun2);transform:translateY(-2px);}
+.btn-calc{width:100%;max-width:480px;margin:24px auto;padding:18px 36px;background:linear-gradient(135deg,var(--sun),var(--sun2));color:var(--dark);border:none;border-radius:50px;font-size:20px;font-weight:900;cursor:pointer;font-family:'Cairo',sans-serif;transition:all .3s;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 24px rgba(245,166,35,0.35);letter-spacing:0.5px;}
+.btn-calc:hover{background:linear-gradient(135deg,var(--sun2),#D47A08);transform:translateY(-3px);box-shadow:0 10px 32px rgba(245,166,35,0.45);}
 
 /* Results */
 .results{display:none;animation:fadeIn .4s ease;}.results.show{display:block;}
